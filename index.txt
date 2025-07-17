@@ -1,0 +1,240 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>ChemQuiz Pro</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <style>
+    body { font-family: Arial; margin: 30px; background-color: #f0f4f8; }
+    h1 { color: #0a466e; font-size: 28px; margin-bottom: 20px; }
+    select, button { padding: 10px; font-size: 16px; margin: 8px 4px; border-radius: 6px; border: none; }
+    button { background-color: #0a466e; color: white; cursor: pointer; }
+    .question-box { background-color: white; border: 1px solid #ccc; padding: 15px; border-radius: 8px; margin-bottom: 20px; }
+    ul { list-style: none; padding-left: 0; }
+    li { margin-bottom: 8px; }
+    .correct { background-color: #d4edda; }
+    .incorrect { background-color: #f8d7da; }
+    #score, #topic-breakdown, #timer { font-weight: bold; font-size: 18px; margin-top: 20px; }
+    .dark-mode { background-color: #1e1e1e; color: #e2e2e2; }
+    .dark-mode .question-box { background-color: #2c2c2c; border-color: #444; }
+    @media screen and (max-width: 600px) {
+      body { margin: 15px; font-size: 16px; }
+      button, select { width: 100%; margin-bottom: 10px; }
+    }
+  </style>
+</head>
+<body>
+<h1>🧪 ChemQuiz Pro</h1>
+
+<label>Select Quiz Category:</label>
+<select id="quiz-category">
+  <option value="general">General</option>
+  <option value="thermo">Thermodynamics</option>
+  <option value="mass">Mass Transfer</option>
+</select>
+<button onclick="loadSelectedQuiz()">Start Quiz</button>
+
+<div id="timer">⏱ Time Left: 60s</div>
+<div id="quiz-container"></div>
+
+<button onclick="submitQuiz()">Submit Quiz</button>
+<button onclick="restartQuiz()">Restart Quiz</button>
+<button onclick="downloadResults()">Download Results</button>
+<button onclick="showHistory()">See Quiz History</button>
+<button onclick="toggleTheme()">Toggle Theme</button>
+
+<div id="score"></div>
+<div id="topic-breakdown"></div>
+<div id="history-output"></div>
+
+<script>
+  const quizSets = {
+    general: [
+      {
+        text: "Which law governs steady-state heat conduction?",
+        options: ["Newton's Law", "Fick's Law", "Fourier's Law", "Stefan-Boltzmann Law"],
+        correctOptionIndex: 2,
+        explanation: "Fourier's Law relates heat flux to temperature gradient.",
+        topic: "Heat Transfer"
+      }
+    ],
+    thermo: [
+      {
+        text: "What does Raoult’s law describe?",
+        options: ["Reaction equilibrium", "Partial vapor pressure", "Ideal gas law", "Enthalpy of mixing"],
+        correctOptionIndex: 1,
+        explanation: "Raoult’s law links vapor pressure of a component to its mole fraction.",
+        topic: "Thermodynamics"
+      }
+    ],
+    mass: [
+      {
+        text: "Which number characterizes mass transfer?",
+        options: ["Prandtl number", "Biot number", "Schmidt number", "Reynolds number"],
+        correctOptionIndex: 2,
+        explanation: "Schmidt number relates momentum diffusivity to mass diffusivity.",
+        topic: "Mass Transfer"
+      }
+    ]
+  };
+
+  let shuffledQuestions = [];
+  let timeLeft = 60;
+  let countdown;
+
+  function loadSelectedQuiz() {
+    const selected = document.getElementById("quiz-category").value;
+    shuffledQuestions = quizSets[selected].sort(() => Math.random() - 0.5);
+    resetTimer();
+    renderQuiz();
+    startTimer();
+  }
+
+  function renderQuiz() {
+    const container = document.getElementById("quiz-container");
+    container.innerHTML = "";
+
+    shuffledQuestions.forEach((question, index) => {
+      const box = document.createElement("div");
+      box.classList.add("question-box");
+      box.id = `question-${index}`;
+
+      const qText = document.createElement("h3");
+      qText.textContent = `Q${index + 1}: ${question.text}`;
+      box.appendChild(qText);
+
+      const list = document.createElement("ul");
+      question.options.forEach((opt, i) => {
+        const item = document.createElement("li");
+        const input = document.createElement("input");
+        input.type = "radio";
+        input.name = `question-${index}`;
+        input.value = i;
+        item.appendChild(input);
+        item.appendChild(document.createTextNode(` ${opt}`));
+        list.appendChild(item);
+      });
+
+      box.appendChild(list);
+      container.appendChild(box);
+    });
+  }
+
+  function submitQuiz() {
+    let score = 0;
+    const topicScores = {};
+
+    shuffledQuestions.forEach((q, i) => {
+      const sel = document.querySelector(`input[name="question-${i}"]:checked`);
+      const box = document.getElementById(`question-${i}`);
+      const isCorrect = sel && parseInt(sel.value) === q.correctOptionIndex;
+
+      box.classList.add(isCorrect ? "correct" : "incorrect");
+      if (isCorrect) score++;
+
+      const ans = document.createElement("p");
+      ans.textContent = `✅ Correct Answer: ${q.options[q.correctOptionIndex]}`;
+      box.appendChild(ans);
+
+      const expl = document.createElement("p");
+      expl.textContent = `💡 Explanation: ${q.explanation}`;
+      box.appendChild(expl);
+
+      const topic = q.topic;
+      if (!topicScores[topic]) topicScores[topic] = { correct: 0, total: 0 };
+      topicScores[topic].total++;
+      if (isCorrect) topicScores[topic].correct++;
+    });
+
+    document.getElementById("score").textContent = `✅ Your Score: ${score} / ${shuffledQuestions.length}`;
+    document.getElementById("topic-breakdown").textContent =
+            `📘 Topic Breakdown: ` +
+            Object.entries(topicScores)
+                    .map(([topic, obj]) => `${topic}: ${obj.correct}/${obj.total}`)
+                    .join(" | ");
+
+    const result = {
+      date: new Date().toLocaleString(),
+      score,
+      total: shuffledQuestions.length,
+      topics: topicScores
+    };
+
+    let history = JSON.parse(localStorage.getItem("quizHistory")) || [];
+    history.push(result);
+    localStorage.setItem("quizHistory", JSON.stringify(history));
+    clearInterval(countdown);
+  }
+
+  function restartQuiz() {
+    window.location.reload();
+  }
+
+  function startTimer() {
+    countdown = setInterval(() => {
+      if (timeLeft <= 0) {
+        clearInterval(countdown);
+        submitQuiz();
+      } else {
+        document.getElementById("timer").textContent = `⏱ Time Left: ${timeLeft}s`;
+        timeLeft--;
+      }
+    }, 1000);
+  }
+
+  function resetTimer() {
+    clearInterval(countdown);
+    timeLeft = 60;
+    document.getElementById("timer").textContent = `⏱ Time Left: ${timeLeft}s`;
+  }
+
+  function toggleTheme() {
+    document.body.classList.toggle("dark-mode");
+  }
+
+  function downloadResults() {
+    const history = JSON.parse(localStorage.getItem("quizHistory")) || [];
+    if (history.length === 0) {
+      alert("No quiz results found.");
+      return;
+    }
+
+    let csv = "Attempt,Date,Score,Total,Topics\n";
+    history.forEach((res, i) => {
+      const topics = Object.entries(res.topics)
+              .map(([k, v]) => `${k} (${v.correct}/${v.total})`).join(" | ");
+      csv += `${i + 1},${res.date},${res.score},${res.total},"${topics}"\n`;
+    });
+
+    const blob = new Blob([csv], { type: "text/csv" });
+    const link = document.createElement("a");
+    link.href = URL.createObjectURL(blob);
+    link.download = "quiz_results.csv";
+    link.click();
+  }
+
+  function showHistory() {
+    const history = JSON.parse(localStorage.getItem("quizHistory")) || [];
+    const out = document.getElementById("history-output");
+    out.innerHTML = "<h3>📊 Quiz History</h3>";
+
+    history.forEach((res, i) => {
+      const topics = Object.entries      });
+  }
+
+  function showHistory() {
+    const history = JSON.parse(localStorage.getItem("quizHistory")) || [];
+    const out = document.getElementById("history-output");
+    out.innerHTML = "<h3>📊 Quiz History</h3>";
+
+    history.forEach((res, i) => {
+      const topics = Object.entries(res.topics)
+              .map(([k, v]) => `${k}: ${v.correct}/${v.total}`).join(" | ");
+      const p = document.createElement("p");
+      p.innerHTML = `Attempt ${i + 1} - ${res.date}: ${res.score}/${res.total}<br>${topics}`;
+      out.appendChild(p);
+    });
+  }
+</script>
+</body>
+</html>
